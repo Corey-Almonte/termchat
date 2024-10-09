@@ -1,0 +1,4 @@
+1. Have two clients connect to server. Setup virtual server to ensure the two clients will act like they are diff network 
+2. Have there be an unending stream of conversation between clients using server
+
+ 

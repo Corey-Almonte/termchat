@@ -1,4 +1,5 @@
 #include "client.h"
+#include "common.h"
 #include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -7,7 +8,7 @@
 #include <unistd.h>
 #include <string.h> 
 
-unsigned int create_client_socket(uint16_t port) {
+int create_client_socket(uint16_t port) {
 
 	struct sockaddr_in server_info = {0};
 	server_info.sin_family = AF_INET;
@@ -26,6 +27,8 @@ unsigned int create_client_socket(uint16_t port) {
 	char buffer[100];
 	recv(client_fd, buffer, sizeof(buffer), 0);
 	printf("%s", buffer);
+
+	return client_fd;
 }
 
 void start_client_application(unsigned int client_socket) {
@@ -35,4 +38,11 @@ void start_client_application(unsigned int client_socket) {
 		fgets(buffer, sizeof(buffer), stdin);
 		send(client_socket, buffer, sizeof(buffer), 0);
 	}
+}
+
+int main() {
+	int client_fd = create_client_socket(PORT);
+	start_client_application(client_fd);
+
+	return 0;
 }

@@ -1,3 +1,4 @@
+#include "client.h"
 #include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -5,11 +6,12 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h> 
-int main(int argc, char** argv) {
-	
+
+unsigned int create_client_socket(uint16_t port) {
+
 	struct sockaddr_in server_info = {0};
 	server_info.sin_family = AF_INET;
-	server_info.sin_port = htons(1337);
+	server_info.sin_port = htons(port);
 	server_info.sin_addr.s_addr = htonl(0x7f000001);
 	
 	int client_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -24,12 +26,13 @@ int main(int argc, char** argv) {
 	char buffer[100];
 	recv(client_fd, buffer, sizeof(buffer), 0);
 	printf("%s", buffer);
-	
+}
+
+void start_client_application(unsigned int client_socket) {
 	// sending messages to server
+	char buffer[100];
 	while(1)  {
 		fgets(buffer, sizeof(buffer), stdin);
-		send(client_fd, buffer, sizeof(buffer), 0);
+		send(client_socket, buffer, sizeof(buffer), 0);
 	}
-	close(client_fd);
-	return 0;
 }

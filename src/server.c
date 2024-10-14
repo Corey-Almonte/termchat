@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
 /**
 	server socket created, bound to port. Listens for connections, client socket connects in client.c, 
 	server accepts and creates a socket with client info in server.c
@@ -50,6 +51,7 @@ void handle_client_socket(unsigned int server_socket) {
 	struct sockaddr_in client_info = {0};
 	socklen_t client_info_len = sizeof(client_info);
 
+	while(1) {
 	int client_socket = accept(server_socket,(struct sockaddr *) &client_info, &client_info_len); 
 	
 	if(client_socket < 0) {
@@ -63,16 +65,21 @@ void handle_client_socket(unsigned int server_socket) {
 		exit(1);
 	}
 
+	pthread_t client_thread;
+	pthread_create(&client_thread, NULL,  _process_client, (void *)&client_socket);
+}
+}
+	
+void* _process_client(void *client_socket) {
+	int *client_socket_p = (int*) (client_socket);
+
 	int num_bytes_read = 0;
 	while(1) {
 		char new_buffer[100];
-		if(num_bytes_read = recv(client_socket, new_buffer, sizeof(new_buffer), 0) == 0) {
+		if(num_bytes_read = recv(*client_socket_p, new_buffer, sizeof(new_buffer), 0) == 0) {
 			perror("failed to read message");
 			exit(1);
 		}
-	
 		printf("%s\n", new_buffer);
-		fflush(stdout);
 	}
 }
-

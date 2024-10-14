@@ -1,10 +1,11 @@
 # targets
-all: termchat client
+all: main client
+
 
 # termchat
-termchat: main.o server.o
-	rm -f termchat
-	gcc -o termchat main.o server.o
+main: main.o server.o
+	rm -f main
+	gcc -o main main.o server.o
 	mv *.o bin/
 
 main.o:  main.c server.h client.h common.h

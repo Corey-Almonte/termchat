@@ -37,6 +37,11 @@ void start_client_application(unsigned int client_socket) {
 	while(1)  {
 		fgets(buffer, sizeof(buffer), stdin);
 		send(client_socket, buffer, sizeof(buffer), 0);
+
+		char buffer[100];
+		recv(client_socket, buffer, sizeof(buffer), 0);
+		printf("%s", buffer);
+
 	}
 }
 

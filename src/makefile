@@ -2,7 +2,7 @@
 all: main client
 
 
-# termchat
+# main
 main: main.o server.o
 	rm -f main
 	gcc -o main main.o server.o
@@ -26,4 +26,4 @@ client.o: client.c client.h common.h
 clean:
 	rm bin/*.o
 	rm client
-	rm termchat
+	rm main

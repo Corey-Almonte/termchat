@@ -9,10 +9,7 @@
 
 int main(int argc, char** argv) {
 	int server_fd = create_server_socket(PORT);
+	handle_client_sockets(server_fd);
 
-
-	handle_client_socket(server_fd);
-
-	handle_client_socket(server_fd);
-return 0;
+	return 0;
 }

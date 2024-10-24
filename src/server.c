@@ -1,4 +1,3 @@
-
 #include "server.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,13 +68,13 @@ int create_server_socket(uint16_t port) {
 }
 
 char *receive_data(int client_socket) {
-	char *buffer = malloc(100* sizeof(char));
+	static char buffer[100];
+	memset(buffer, 0, sizeof(buffer));
 	int num_bytes_read = 0;	
 	if(num_bytes_read = recv(client_socket, buffer, sizeof(buffer), 0) == 0) {
 		perror("failed to read message");
 		exit(1);
 	}
-
 	return buffer;	
 }
 
@@ -93,14 +92,16 @@ void handle_client_sockets(unsigned int server_socket) {
 	int client_sockets[2] = {0};
 	int client_socket_index = 0;
 	while(1) {
-		client_sockets[client_socket_index] = accept(server_socket,
+		client_sockets[client_socket_index] = accept(server_socket, 
 			(struct sockaddr *) &client_info, &client_info_len); 
+		
 		if(client_sockets[client_socket_index] < 0) {
 			perror("Server rejects client connection");
 			exit(1);
 		}
 
-		// fcntl(client_sockets[client_socket_index], F_SETFL, O_NONBLOCK);
+		// Non blocking I/O
+		fcntl(client_sockets[client_socket_index], F_SETFL, O_NONBLOCK);
 
 		char *buffer = "You are now connected to the server.\n"; 
 		if(send(client_sockets[client_socket_index], (void *) buffer, strlen(buffer), 0) < 0) {
@@ -111,27 +112,23 @@ void handle_client_sockets(unsigned int server_socket) {
 		client_socket_index++;	
 		printf("client %d of 2\n", client_socket_index);
 		if(client_socket_index > 1) {
-			printf("Entered pthread_create if statement!\n");
-			pthread_t client_thread;
-		
-			pthread_create(&client_thread, NULL,  _process_client, (void *) client_sockets);
-		
+			break;	
 		}
 	}
+	int client_socket_count = client_socket_index;
+	_process_clients(client_sockets, client_socket_count);
 }
 	
-void* _process_client(void *client_sockets) {
-	int (*client_socket_p)[2] = (int (*)[2])client_sockets;
+void _process_clients(int *client_sockets, int client_socket_count) {
 	
 	struct epoll_event event;
 	struct epoll_event events[MAX_EVENTS];
 	int epoll_fd = epoll_create1(0);
 
-	printf("Able to print in client thread!\n");
 	for(int i = 0; i < 2; i++) {
-		event.data.fd = (*client_socket_p)[i];
+		event.data.fd = client_sockets[i];
 		event.events = EPOLLIN | EPOLLOUT;
-		if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, (*client_socket_p)[i], &event) == -1) {
+		if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sockets[i], &event) == -1) {
 			perror("epoll_ctl:");
 			exit(1);
 		}
@@ -139,32 +136,42 @@ void* _process_client(void *client_sockets) {
 		printf("Is it a correct file descriptor? %s\n\n", (fcntl(event.data.fd, F_GETFL) != -1)  ? "yes" : "no");
 	}
 
-	char *buffer = NULL;
-	int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
-	if(num_events < 0) {
-		perror("Failed epoll_wait: ");
-		exit(1);
-	}
-	printf("Number of triggered events: %d\n", num_events);
-	for(int i = 0; i < num_events; i++) {
-		/** printf("epoll_wait loop: client socket %d, %s\n", event.data.fd, 
-			events[i].events & EPOLLERR? "error" : "no errors");
-		printf("epoll_wait loop: client socket %d, %s socket\n", event.data.fd, 
-			events[i].events&EPOLLIN? "readable":"unreadable");
-		printf("epoll_wait loop: client socket %d, %s socket\n\n", event.data.fd, 
-			events[i].events&EPOLLOUT? "writable":"unwrtiable");
-		**/
-		if(events[i].events & EPOLLIN) {
-			printf("Client socket %d entered EPOLLIN if statement \n", events[i].data.fd);
-			//buffer = receive_data(events[i].data.fd);
-			//printf("buffer in epoll loop says: %s\n", buffer);
-			//printf("%s\n", buffer);
+	char buffer[100];
+	while(1) {
+		int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+		if(num_events < 0) {
+			perror("Failed epoll_wait: ");
+			exit(1);
 		}
-		if(events[i].events & EPOLLOUT) {
-			printf("Client socket %d entered EPOLLOUT if statement \n", events[i].data.fd);
-			send_data(events[i].data.fd, "sent data to you");		
-		}
-	}
-	close(epoll_fd);
-}
+		//printf("Number of triggered events: %d\n", num_events);
+		for(int i = 0; i < num_events; i++) {
+			/** printf("epoll_wait loop: client socket %d, %s\n", event.data.fd, 
+				events[i].events & EPOLLERR? "error" : "no errors");
+			printf("epoll_wait loop: client socket %d, %s socket\n", event.data.fd, 
+				events[i].events&EPOLLIN? "readable":"unreadable");
+			printf("epoll_wait loop: client socket %d, %s socket\n\n", event.data.fd, 
+				events[i].events&EPOLLOUT? "writable":"unwrtiable");
+			**/
+			if(events[i].events & EPOLLIN) {
+				//printf("Client socket %d entered EPOLLIN if statement \n", events[i].data.fd);
+				
+				//buffer = receive_data(events[i].data.fd);
+				//printf("buffer in epoll loop says: %s\n", buffer);
+				//printf("%s\n", buffer);
+				if(buffer[0] == '\0') {
 
+					strcpy(buffer, receive_data(events[i].data.fd));
+				}
+			}
+			if(events[i].events & EPOLLOUT) {
+				//printf("Client socket %d entered EPOLLOUT if statement \n", events[i].data.fd);
+				if(buffer[0] == '\0') {
+					continue;
+				}
+				(events[i].data.fd == 4) ? send_data(5, buffer) : send_data(4, buffer);
+				memset(buffer, 0, sizeof(buffer));
+			}
+		}
+	}
+		close(epoll_fd);
+}

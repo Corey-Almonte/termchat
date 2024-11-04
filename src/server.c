@@ -38,8 +38,9 @@ int create_server_socket(uint16_t port) {
 		close(server_fd);
 		return -1;
 	}
-	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,  &option, sizeof(option));
-	if(bind(server_fd, (const struct sockaddr *)&server_info, server_info_len) < 0) {
+	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,  &option, sizeof(option));
+	
+  if(bind(server_fd, (const struct sockaddr *)&server_info, server_info_len) < 0) {
 		perror("Server socket failed to bind");
 		close(server_fd);
 		return -1;
@@ -50,32 +51,33 @@ int create_server_socket(uint16_t port) {
 		close(server_fd);
 		exit(1);
 	}
-	printf("SO_REUSEADDR is %s\n", (optval ? "enabled" : "disabled"));
 	
-	if(getsockopt(server_fd, SOL_SOCKET, SO_LINGER,  &optval, &optlen) < 0) {
+	if(getsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT,  &optval, &optlen) < 0) {
 		perror("getsockopt error: SO_LINGER");
 		close(server_fd);
 		exit(1);
 	}
-	printf("SO_LINGER is %s\n", (optval ? "enabled" : "disabled"));
 
 	if(listen(server_fd, 0) < 0) {
 		perror("Server socket failed to listen");
 		close(server_fd);
 		return -1;
 	}
-	return server_fd;
+
+  printf("Started server...\n");
+  return server_fd;
 }
 
-char *receive_data(int client_socket) {
-	static char buffer[100];
-	memset(buffer, 0, sizeof(buffer));
-	int num_bytes_read = 0;	
-	if(num_bytes_read = recv(client_socket, buffer, sizeof(buffer), 0) == 0) {
+/**
+ssize_t receive_data(int client_socket, char *buf) {
+	memset(buf, 0, sizeof(buf));
+	int num_bytes_read = 0;
+  //printf(("received data:\n");
+	if(num_bytes_read = recv(client_socket, buf, sizeof(buf), 0) == 0) {
 		perror("failed to read message");
 		exit(1);
 	}
-	return buffer;	
+	return num_bytes_read;	
 }
 
 void send_data(int client_socket, char *buffer) {
@@ -84,7 +86,7 @@ void send_data(int client_socket, char *buffer) {
 		exit(1);
 	}
 }
-
+**/
 void handle_client_sockets(unsigned int server_socket) {
 	struct sockaddr_in client_info = {0};
 	socklen_t client_info_len = sizeof(client_info);
@@ -103,13 +105,13 @@ void handle_client_sockets(unsigned int server_socket) {
 		// Non blocking I/O
 		fcntl(client_sockets[client_socket_index], F_SETFL, O_NONBLOCK);
 
-		char *buffer = "You are now connected to the server.\n"; 
+		char buffer[] = "You are now connected to the server.\n"; 
 		if(send(client_sockets[client_socket_index], (void *) buffer, strlen(buffer), 0) < 0) {
 			perror("Message to server failed to send");
 			exit(1);
 		}
-
-		client_socket_index++;	
+    memset(buffer, 0, sizeof(buffer));
+    client_socket_index++;	
 		printf("client %d of 2\n", client_socket_index);
 		if(client_socket_index > 1) {
 			break;	
@@ -127,51 +129,52 @@ void _process_clients(int *client_sockets, int client_socket_count) {
 
 	for(int i = 0; i < 2; i++) {
 		event.data.fd = client_sockets[i];
-		event.events = EPOLLIN | EPOLLOUT;
+		event.events = EPOLLIN;
 		if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sockets[i], &event) == -1) {
 			perror("epoll_ctl:");
 			exit(1);
 		}
-		printf("client%d file descripter: %d\n", i, event.data.fd);
-		printf("Is it a correct file descriptor? %s\n\n", (fcntl(event.data.fd, F_GETFL) != -1)  ? "yes" : "no");
-	}
+		//printf("client%d file descripter: %d\n", i, event.data.fd);
+		//printf("Is it a correct file descriptor? %s\n\n", (fcntl(event.data.fd, F_GETFL) != -1)  ? "yes" : "no");
+  }
 
+	int num_fds = 0;
 	char buffer[100];
+  int count = 0;
+  int ready_write = -1;
+  memset(buffer, 0, sizeof(buffer));
 	while(1) {
-		int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
-		if(num_events < 0) {
+    num_fds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+		if(num_fds < 0) {
 			perror("Failed epoll_wait: ");
 			exit(1);
-		}
-		//printf("Number of triggered events: %d\n", num_events);
-		for(int i = 0; i < num_events; i++) {
-			/** printf("epoll_wait loop: client socket %d, %s\n", event.data.fd, 
-				events[i].events & EPOLLERR? "error" : "no errors");
-			printf("epoll_wait loop: client socket %d, %s socket\n", event.data.fd, 
-				events[i].events&EPOLLIN? "readable":"unreadable");
-			printf("epoll_wait loop: client socket %d, %s socket\n\n", event.data.fd, 
-				events[i].events&EPOLLOUT? "writable":"unwrtiable");
-			**/
-			if(events[i].events & EPOLLIN) {
-				//printf("Client socket %d entered EPOLLIN if statement \n", events[i].data.fd);
-				
-				//buffer = receive_data(events[i].data.fd);
-				//printf("buffer in epoll loop says: %s\n", buffer);
-				//printf("%s\n", buffer);
-				if(buffer[0] == '\0') {
+    }
 
-					strcpy(buffer, receive_data(events[i].data.fd));
-				}
-			}
-			if(events[i].events & EPOLLOUT) {
-				//printf("Client socket %d entered EPOLLOUT if statement \n", events[i].data.fd);
-				if(buffer[0] == '\0') {
-					continue;
-				}
-				(events[i].data.fd == 4) ? send_data(5, buffer) : send_data(4, buffer);
-				memset(buffer, 0, sizeof(buffer));
-			}
-		}
-	}
-		close(epoll_fd);
+		for(int i = 0; i < num_fds; i++) { 
+      if(events[i].events & EPOLLIN) {
+        memset(buffer, 0, sizeof(buffer));
+        recv(events[i].data.fd, buffer, sizeof(buffer), 0);
+        printf("received from (%d): %s\n", events[i].data.fd, buffer);
+        
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLOUT;
+        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, events[i].data.fd, &ev);
+        ready_write = 1;
+      }
+      
+      if(events[i].events & EPOLLOUT && ready_write == 1) {
+          
+        //printf("counted %d\n", count++);
+        send(client_sockets[1], (void *) buffer, strlen(buffer), 0);
+        printf("sent to (%d): %s\n", client_sockets[1], buffer);
+        memset(buffer, 0, sizeof(buffer));
+  
+        struct epoll_event ev;
+        ev.events = EPOLLIN;
+        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, events[i].data.fd, &ev);
+        
+        ready_write = -1;
+      }
+    }
+  }
 }

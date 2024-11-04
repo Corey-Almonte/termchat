@@ -29,19 +29,20 @@ int create_client_socket(uint16_t port) {
 	printf("%s", buffer);
 
 	return client_fd;
+
 }
 
 void start_client_application(unsigned int client_socket) {
 	// sending messages to server
 	char buffer[100];
 	while(1)  {
-		fgets(buffer, sizeof(buffer), stdin);
+	  memset(buffer, 0, sizeof(buffer));
+    fgets(buffer, sizeof(buffer), stdin);
 		send(client_socket, buffer, sizeof(buffer), 0);
+    recv(client_socket, buffer, sizeof(buffer), 0);
 
-		char buffer[100];
-		recv(client_socket, buffer, sizeof(buffer), 0);
-		printf("%s", buffer);
-
+		printf("received: %s\n", buffer);
+    fflush(stdout); 
 	}
 }
 

@@ -1,0 +1,11 @@
+# Ignore compiled files
+*.o
+*.a
+*.so
+*.out
+src/client
+src/main
+
+
+#ignore directories
+bin/

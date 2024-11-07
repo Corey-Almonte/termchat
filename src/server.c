@@ -118,10 +118,10 @@ void handle_client_sockets(unsigned int server_socket) {
 		}
 	}
 	int client_socket_count = client_socket_index;
-	_process_clients(client_sockets, client_socket_count);
+	process_clients(client_sockets, client_socket_count);
 }
 	
-void _process_clients(int *client_sockets, int client_socket_count) {
+void process_clients(int *client_sockets, int client_socket_count) {
 	
 	struct epoll_event event;
 	struct epoll_event events[MAX_EVENTS];
@@ -129,19 +129,19 @@ void _process_clients(int *client_sockets, int client_socket_count) {
 
 	for(int i = 0; i < 2; i++) {
 		event.data.fd = client_sockets[i];
-		event.events = EPOLLIN;
+		event.events = EPOLLIN | EPOLLOUT;
 		if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sockets[i], &event) == -1) {
 			perror("epoll_ctl:");
 			exit(1);
 		}
-		//printf("client%d file descripter: %d\n", i, event.data.fd);
-		//printf("Is it a correct file descriptor? %s\n\n", (fcntl(event.data.fd, F_GETFL) != -1)  ? "yes" : "no");
+		// printf("client%d file descripter: %d\n", i, event.data.fd);
+		// printf("Is it a correct file descriptor? %s\n\n", (fcntl(event.data.fd, F_GETFL) != -1)  ? "yes" : "no");
   }
 
-	int num_fds = 0;
 	char buffer[100];
   int count = 0;
   int ready_write = -1;
+	int num_fds = 0;
   memset(buffer, 0, sizeof(buffer));
 	while(1) {
     num_fds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
@@ -152,27 +152,26 @@ void _process_clients(int *client_sockets, int client_socket_count) {
 
 		for(int i = 0; i < num_fds; i++) { 
       if(events[i].events & EPOLLIN) {
-        memset(buffer, 0, sizeof(buffer));
+        //memset(buffer, 0, sizeof(buffer));
+        
         recv(events[i].data.fd, buffer, sizeof(buffer), 0);
         printf("received from (%d): %s\n", events[i].data.fd, buffer);
-        
-        struct epoll_event ev;
-        ev.events = EPOLLIN | EPOLLOUT;
-        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, events[i].data.fd, &ev);
         ready_write = 1;
       }
-      
+
       if(events[i].events & EPOLLOUT && ready_write == 1) {
-          
-        //printf("counted %d\n", count++);
-        send(client_sockets[1], (void *) buffer, strlen(buffer), 0);
-        printf("sent to (%d): %s\n", client_sockets[1], buffer);
+        int client_index = 0;
+        while(client_index < client_socket_count) {
+          //printf("client_fd: %d, event_fd: %d\n", client_sockets[client_index], events[i].data.fd);
+          if(events[i].data.fd == client_sockets[client_index]) {
+            client_index+=1;
+            continue;
+          }
+          send(client_sockets[client_index], (void *) buffer, strlen(buffer), 0);
+          printf("sent to (%d): %s\n", client_sockets[client_index], buffer);
+          client_index+=1;
+        }
         memset(buffer, 0, sizeof(buffer));
-  
-        struct epoll_event ev;
-        ev.events = EPOLLIN;
-        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, events[i].data.fd, &ev);
-        
         ready_write = -1;
       }
     }

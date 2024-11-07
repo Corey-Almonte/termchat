@@ -5,7 +5,7 @@
 
 int create_server_socket(uint16_t port);
 void handle_client_sockets(unsigned int server_socket);
-void _process_clients(int *client_sockets, int client_socket_count); 
+void process_clients(int *client_sockets, int client_socket_count); 
 
 
 

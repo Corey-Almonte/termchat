@@ -9,8 +9,10 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <poll.h>
+#include <sys/epoll.h>
 #include <stdlib.h>
+
+#define MAX_EVENTS 3
 
 int create_client_socket(uint16_t port) {
 
@@ -22,12 +24,14 @@ int create_client_socket(uint16_t port) {
 	int client_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if(client_fd < 0) {
 		perror("Failed to create client socket");
-	}
+	  return -1;
+  }
 
 	size_t server_info_len = sizeof(server_info);
-	ssize_t connected = connect(client_fd, (const struct sockaddr *) &server_info, server_info_len);
-  if(connected < 0) {
-		perror("client failed to connect to server");
+  if(connect(client_fd, (const struct sockaddr *) &server_info, server_info_len) < 0) {
+    perror("client failed to connect to server");
+		close(client_fd);
+    return -1;
   }
 
   char initial_message[MAX_BUFFER_SIZE] = {0};
@@ -53,65 +57,96 @@ void start_client_application(int client_fd) {
   fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
   fcntl(STDOUT_FILENO, F_SETFL, O_NONBLOCK);
 
-  struct pollfd poll_fds[3];
-  int num_fds = sizeof(poll_fds)/sizeof(poll_fds[0]);
-
-  poll_fds[0].fd = STDIN_FILENO;
-  poll_fds[0].events = POLLIN;
-  poll_fds[1].fd = client_fd;
-  poll_fds[1].events = POLLIN | POLLOUT;
-  poll_fds[2].fd = STDOUT_FILENO;
-  poll_fds[2].events = POLLOUT;
+  struct epoll_event event;
+  struct epoll_event events[MAX_EVENTS];
+  int epoll_fd = epoll_create1(0);
+  if(epoll_fd < 0) {
+    perror("Could not create epoll instance");
+    exit(EXIT_FAILURE);
+  }
 
   int user_write = 0;
   int message_write = 0;
   char buffer[MAX_BUFFER_SIZE];
-  int poll_wait = -1;
+
+  event.events = EPOLLIN;
+  event.data.fd = STDIN_FILENO;
+  if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDIN_FILENO, &event) == -1) {
+        perror("epoll_ctl failed for STDIN_FILENO");
+        close(epoll_fd);
+        exit(EXIT_FAILURE);
+  }
+
+  event.events = EPOLLIN | EPOLLOUT;
+  event.data.fd = client_fd;
+  if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event) == -1) {
+        perror("epoll_ctl failed for client_fd");
+        close(epoll_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    event.events = EPOLLOUT;
+    event.data.fd = STDOUT_FILENO;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDOUT_FILENO, &event) == -1) {
+        perror("epoll_ctl failed for STDOUT_FILENO");
+        close(epoll_fd);
+        exit(EXIT_FAILURE);
+    }
+
   while(1) {
-    poll_wait = poll(poll_fds, num_fds, -1);
-    if(poll_wait < 0) {
-      perror("Client: Failed to wait for poll events");
+    int num_fds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+    if(num_fds < 0) {
+      perror("Client: Failed to wait for epoll events");
+      close(epoll_fd);
       exit(EXIT_FAILURE);
     }
 
-    if(poll_fds[0].revents & POLLIN) {
-      ssize_t bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer) - 1);
-      if(bytes_read < 0) {
-        perror("Client: Failed to capture user input: ");
-        exit(EXIT_FAILURE);
-      }
-      buffer[bytes_read] = '\0';
-      user_write = 1;
-    }
+    for(int i = 0; i < num_fds; i++) {
+      int fd = events[i].data.fd;
 
-    if(poll_fds[1].revents & POLLOUT && user_write == 1) {
-      ssize_t bytes_sent = send(client_fd, buffer, strlen(buffer), 0);
-      if(bytes_sent < 0) {
-        perror("Client: Failed to send bytes over network: ");
-        exit(EXIT_FAILURE);
+      if(fd == STDIN_FILENO && events[i].events & EPOLLIN) {
+        ssize_t bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer) - 1);
+        if(bytes_read < 0) {
+          perror("Client: Failed to capture user input: ");
+          close(epoll_fd);
+          exit(EXIT_FAILURE);
+        }
+        buffer[bytes_read] = '\0';
+        user_write = 1;
       }
-      memset(buffer, 0, sizeof(buffer));
-      user_write = 0;
-    }
 
-    if(poll_fds[1].revents & POLLIN) {
-      ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-      if(bytes_received < 0) {
-        perror("Client: Failed to receive bytes over network: ");
-        exit(EXIT_FAILURE);
+      if(fd == client_fd && events[i].events & EPOLLOUT && user_write == 1) {
+        ssize_t bytes_sent = send(client_fd, buffer, strlen(buffer), 0);
+        if(bytes_sent < 0) {
+          perror("Client: Failed to send bytes over network: ");
+          close(epoll_fd);
+          exit(EXIT_FAILURE);
+        }
+        memset(buffer, 0, sizeof(buffer));
+        user_write = 0;
       }
-      buffer[bytes_received] = '\0';
-      message_write = 1;
-    }
 
-    if(poll_fds[2].revents & POLLOUT && message_write == 1) {
-      ssize_t bytes_written = write(STDOUT_FILENO, buffer, strlen(buffer));
-      if(bytes_written < 0) {
-        perror("Client: Failed tp write bytes to user console");
-        exit(EXIT_FAILURE);
+      if(fd == client_fd && events[i].events & EPOLLIN) {
+        ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+        if(bytes_received < 0) {
+          perror("Client: Failed to receive bytes over network: ");
+          close(epoll_fd);
+          exit(EXIT_FAILURE);
+        }
+        buffer[bytes_received] = '\0';
+        message_write = 1;
       }
-      memset(buffer, 0, sizeof(buffer));
-      message_write = 0;
+
+      if(fd == STDOUT_FILENO && events[i].events & EPOLLOUT && message_write == 1) {
+        ssize_t bytes_written = write(STDOUT_FILENO, buffer, strlen(buffer));
+        if(bytes_written < 0) {
+          perror("Client: Failed tp write bytes to user console");
+          close(epoll_fd);
+          exit(EXIT_FAILURE);
+        }
+        memset(buffer, 0, sizeof(buffer));
+        message_write = 0;
+      }
     }
   }
 }

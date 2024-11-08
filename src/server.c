@@ -30,16 +30,14 @@ int create_server_socket(uint16_t port) {
 	const int option = 1;
 	int optval;
 	socklen_t optlen = sizeof(optval);
-	int server_fd = 0;
-
-	if((server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+	
+  int server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if(server_fd < 0) {
 		perror("server socket failed to be created ");
-		close(server_fd);
 		return -1;
 	}
 	
-  ssize_t set_reuse_addr = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,  &option, sizeof(option));
-  if(set_reuse_addr < 0) {
+  if(setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,  &option, sizeof(option)) < 0) {
     perror("Failed to set socket opetion SO_REUSEADDR");
     return -1;
   }

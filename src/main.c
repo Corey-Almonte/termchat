@@ -7,7 +7,7 @@
 	//	Create the whole observer pattern schema. As we may want multiple observers (Server, Logging)
 	//	If num_clients == 0, stop while loop.
 
-int main(int argc, char** argv) {
+int main(void) {
 	int server_fd = create_server_socket(PORT);
 	handle_client_sockets(server_fd);
 

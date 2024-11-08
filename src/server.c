@@ -37,8 +37,13 @@ int create_server_socket(uint16_t port) {
 		close(server_fd);
 		return -1;
 	}
-	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,  &option, sizeof(option));
 	
+  ssize_t set_reuse_addr = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,  &option, sizeof(option));
+  if(set_reuse_addr < 0) {
+    perror("Failed to set socket opetion SO_REUSEADDR");
+    return -1;
+  }
+
   if(bind(server_fd, (const struct sockaddr *)&server_info, server_info_len) < 0) {
 		perror("Server socket failed to bind");
 		close(server_fd);
@@ -47,12 +52,6 @@ int create_server_socket(uint16_t port) {
 	
 	if(getsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,  &optval, &optlen) < 0) {
 		perror("getsockopt error: REUSEADDR");
-		close(server_fd);
-		exit(1);
-	}
-	
-	if(getsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT,  &optval, &optlen) < 0) {
-		perror("getsockopt error: SO_LINGER");
 		close(server_fd);
 		exit(1);
 	}
@@ -118,7 +117,6 @@ void process_clients(int *client_sockets, int client_socket_count) {
   }
 
 	char buffer[100];
-  int count = 0;
   int ready_write = 0;
 	int num_fds = 0;
   memset(buffer, 0, sizeof(buffer));

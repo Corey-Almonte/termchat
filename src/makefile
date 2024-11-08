@@ -9,10 +9,10 @@ main: main.o server.o
 	mv *.o bin/
 
 main.o:  main.c server.h client.h common.h
-	gcc -g -D_GLIBCXX_DEBUG -c main.c
+	gcc -Wall -Wextra -pedantic -std=c17 -g -D_GLIBCXX_DEBUG -c main.c
 
 server.o: server.c server.h common.h
-	gcc -g -D_GLIBCXX_DEBUG -c server.c
+	gcc -Wall -Wextra -pedantic -std=c17 -g -D_GLIBCXX_DEBUG -c server.c
 
 # client
 client: client.o
@@ -21,7 +21,7 @@ client: client.o
 	mv client.o bin/
 
 client.o: client.c client.h common.h
-	gcc -g -D_GLIBCXX_DEBUG -c client.c
+	gcc -Wall -Wextra -pedantic -std=c17 -g -D_GLIBCXX_DEBUG -c client.c
 
 clean:
 	rm bin/*.o

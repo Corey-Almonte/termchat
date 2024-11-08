@@ -27,7 +27,6 @@ int create_server_socket(uint16_t port) {
 	server_info.sin_port = htons(port);
 
 	socklen_t server_info_len = sizeof(server_info); 
-
 	const int option = 1;
 	int optval;
 	socklen_t optlen = sizeof(optval);
@@ -64,29 +63,10 @@ int create_server_socket(uint16_t port) {
 		return -1;
 	}
 
-  printf("Started server...\n");
+  printf("Starting server...\n");
   return server_fd;
 }
 
-/**
-ssize_t receive_data(int client_socket, char *buf) {
-	memset(buf, 0, sizeof(buf));
-	int num_bytes_read = 0;
-  //printf(("received data:\n");
-	if(num_bytes_read = recv(client_socket, buf, sizeof(buf), 0) == 0) {
-		perror("failed to read message");
-		exit(1);
-	}
-	return num_bytes_read;	
-}
-
-void send_data(int client_socket, char *buffer) {
-	if(send(client_socket, buffer, strlen(buffer), 0) < 0) {
-		perror("Message to server failed to send");
-		exit(1);
-	}
-}
-**/
 void handle_client_sockets(unsigned int server_socket) {
 	struct sockaddr_in client_info = {0};
 	socklen_t client_info_len = sizeof(client_info);
@@ -102,7 +82,6 @@ void handle_client_sockets(unsigned int server_socket) {
 			exit(1);
 		}
 
-		// Non blocking I/O
 		fcntl(client_sockets[client_socket_index], F_SETFL, O_NONBLOCK);
 
 		char buffer[] = "You are now connected to the server.\n"; 
@@ -140,7 +119,7 @@ void process_clients(int *client_sockets, int client_socket_count) {
 
 	char buffer[100];
   int count = 0;
-  int ready_write = -1;
+  int ready_write = 0;
 	int num_fds = 0;
   memset(buffer, 0, sizeof(buffer));
 	while(1) {
@@ -151,9 +130,7 @@ void process_clients(int *client_sockets, int client_socket_count) {
     }
 
 		for(int i = 0; i < num_fds; i++) { 
-      if(events[i].events & EPOLLIN) {
-        //memset(buffer, 0, sizeof(buffer));
-        
+      if(events[i].events & EPOLLIN) { 
         recv(events[i].data.fd, buffer, sizeof(buffer), 0);
         printf("received from (%d): %s\n", events[i].data.fd, buffer);
         ready_write = 1;
@@ -162,7 +139,6 @@ void process_clients(int *client_sockets, int client_socket_count) {
       if(events[i].events & EPOLLOUT && ready_write == 1) {
         int client_index = 0;
         while(client_index < client_socket_count) {
-          //printf("client_fd: %d, event_fd: %d\n", client_sockets[client_index], events[i].data.fd);
           if(events[i].data.fd == client_sockets[client_index]) {
             client_index+=1;
             continue;
@@ -172,7 +148,7 @@ void process_clients(int *client_sockets, int client_socket_count) {
           client_index+=1;
         }
         memset(buffer, 0, sizeof(buffer));
-        ready_write = -1;
+        ready_write = 0;
       }
     }
   }

@@ -51,7 +51,7 @@ int create_client_socket(uint16_t port) {
 
 	return client_fd;
 }
-
+// TODO: Change buffer flags to use io state machine 
 void start_client_application(int client_fd) {
   fcntl(client_fd, F_SETFL, O_NONBLOCK);
   fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
@@ -105,6 +105,7 @@ void start_client_application(int client_fd) {
       int fd = events[i].data.fd;
 
       if(fd == STDIN_FILENO && events[i].events & EPOLLIN) {
+        // WARN: sizeof buffer for read calls in terminals will be when newline character is entered
         ssize_t bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer) - 1);
         if(bytes_read < 0) {
           perror("Client: Failed to capture user input: ");
